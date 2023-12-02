@@ -1,25 +1,33 @@
-const Main = imports.ui.main;
-const ExtensionUtils = imports.misc.extensionUtils;
+import * as Main from "resource:///org/gnome/shell/ui/main.js";
+import { Extension } from "resource:///org/gnome/shell/extensions/extension.js";
 
-class StealMyFocus {
+export default class StealMyFocus extends Extension {
   constructor() {
-    this._windowDemandsAttentionId = global.display.connect('window-demands-attention', this._onWindowDemandsAttention.bind(this));
-    this._windowMarkedUrgentId = global.display.connect('window-marked-urgent', this._onWindowDemandsAttention.bind(this));
-  
-    log("Disabling 'Window Is Ready' Notification");
+    super();
+    this._windowDemandsAttentionId = global.display.connect(
+      "window-demands-attention",
+      this._onWindowDemandsAttention.bind(this)
+    );
+    this._windowMarkedUrgentId = global.display.connect(
+      "window-marked-urgent",
+      this._onWindowDemandsAttention.bind(this)
+    );
+
+    console.log("Disabling 'Window Is Ready' Notification");
   }
 
   _onWindowDemandsAttention(display, window) {
-    if (!window || window.has_focus() || window.is_skip_taskbar())
-            return;
+    if (!window || window.has_focus() || window.is_skip_taskbar()) return;
 
-    let settings = ExtensionUtils.getSettings('org.gnome.shell.extensions.noannoyance');
-    let preventDisable = settings.get_boolean('enable-ignorelist');
-    let byClassList = settings.get_strv('by-class');
+    let settings = this.getSettings();
+    let preventDisable = settings.get_boolean("enable-ignorelist");
+    let byClassList = settings.get_strv("by-class");
 
     if (preventDisable) {
       if (byClassList.includes(window.get_wm_class())) {
-        global.log(`Ignored "${window.get_wm_class()}"s Request to Steal Focus`);
+        console.log(
+          `Ignored "${window.get_wm_class()}"s Request to Steal Focus`
+        );
         return;
       }
     }
@@ -30,32 +38,33 @@ class StealMyFocus {
   destroy() {
     global.display.disconnect(this._windowDemandsAttentionId);
     global.display.disconnect(this._windowMarkedUrgentId);
-    log("Reenabling 'Window Is Ready' Notification");
+    console.log("Reenabling 'Window Is Ready' Notification");
   }
-}
 
-let stealmyfocus;
-let oldHandler;
+  enable() {
+    this._settings = this.getSettings();
+    console.log(_("This is a translatable text"));
 
-function init() {
-}
+    global.display.disconnect(
+      Main.windowAttentionHandler._windowDemandsAttentionId
+    );
+    global.display.disconnect(
+      Main.windowAttentionHandler._windowMarkedUrgentId
+    );
+    this.oldHandler = Main.windowAttentionHandler;
+    Main.windowAttentionHandler = this;
+  }
 
-function enable() {
-  global.display.disconnect(Main.windowAttentionHandler._windowDemandsAttentionId);
-  global.display.disconnect(Main.windowAttentionHandler._windowMarkedUrgentId);
-  oldHandler = Main.windowAttentionHandler;
+  disable() {
+    this.oldHandler._windowDemandsAttentionId = global.display.connect(
+      "window-demands-attention",
+      this.oldHandler._onWindowDemandsAttention.bind(this.oldHandler)
+    );
+    this.oldHandler._windowMarkedUrgentId = global.display.connect(
+      "window-marked-urgent",
+      this.oldHandler._onWindowDemandsAttention.bind(this.oldHandler)
+    );
 
-  stealmyfocus = new StealMyFocus();
-
-  Main.windowAttentionHandler = stealmyfocus;
-}
-
-function disable() {
-  stealmyfocus.destroy();
-  stealmyfocus = null;
-
-  oldHandler._windowDemandsAttentionId = global.display.connect('window-demands-attention', oldHandler._onWindowDemandsAttention.bind(oldHandler));
-  oldHandler._windowMarkedUrgentId = global.display.connect('window-marked-urgent', oldHandler._onWindowDemandsAttention.bind(oldHandler));
-
-  Main.windowAttentionHandler = oldHandler;
+    Main.windowAttentionHandler = this.oldHandler;
+  }
 }
